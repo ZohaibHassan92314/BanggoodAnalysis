@@ -6,22 +6,8 @@ import matplotlib.pyplot as plt
 st.set_page_config(page_title="Banggood Products Dashboard", layout="wide")
 st.title("📊 Banggood Products Dashboard")
 
-# --- Load data ---
+# --- Load data from CSV only ---
 
-try:
-import pyodbc
-server = r'DESKTOP-34R9A31\SQL2025Z'
-database = 'BanggoodDB'
-conn = pyodbc.connect(
-f'DRIVER={{ODBC Driver 18 for SQL Server}};'
-f'SERVER={server};'
-f'DATABASE={database};'
-f'Trusted_Connection=yes;'
-f'Encrypt=no;'
-)
-df = pd.read_sql("SELECT * FROM dbo.BanggoodProducts", conn)
-except Exception as e:
-st.warning(f"SQL Server connection failed. Using CSV fallback. ({e})")
 df = pd.read_csv("BanggoodProducts.csv")
 
 # --- Sidebar filter ---
