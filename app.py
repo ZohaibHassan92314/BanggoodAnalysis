@@ -8,7 +8,7 @@ st.title("📊 Banggood Products Dashboard")
 
 # --- Load data from CSV only ---
 
-df = pd.read_csv("BanggoodProducts.csv")
+df = pd.read_csv("banggood_products_cleaned.csv")
 
 # --- Sidebar filter ---
 
