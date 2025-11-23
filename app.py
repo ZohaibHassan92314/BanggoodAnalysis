@@ -4,7 +4,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Banggood Products Dashboard", layout="wide")
-
 st.title("📊 Banggood Products Dashboard")
 
 # --- Load data ---
@@ -14,16 +13,20 @@ import pyodbc
 server = r'DESKTOP-34R9A31\SQL2025Z'
 database = 'BanggoodDB'
 conn = pyodbc.connect(
-f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={server};DATABASE={database};Trusted_Connection=yes;Encrypt=no;'
+f'DRIVER={{ODBC Driver 18 for SQL Server}};'
+f'SERVER={server};'
+f'DATABASE={database};'
+f'Trusted_Connection=yes;'
+f'Encrypt=no;'
 )
 df = pd.read_sql("SELECT * FROM dbo.BanggoodProducts", conn)
-except:
-st.warning("Local SQL Server not accessible. Using CSV fallback.")
+except Exception as e:
+st.warning(f"SQL Server connection failed. Using CSV fallback. ({e})")
 df = pd.read_csv("BanggoodProducts.csv")
 
-# --- Sidebar filters ---
+# --- Sidebar filter ---
 
-categories = df['main_category'].unique()
+categories = df['main_category'].dropna().unique()
 selected_category = st.sidebar.selectbox("Select Main Category", categories)
 df_filtered = df[df['main_category'] == selected_category]
 
@@ -39,14 +42,23 @@ col4.metric("Avg Reviews", f"{df_filtered['review_count'].mean():.0f}")
 
 st.subheader("Price Distribution")
 fig, ax = plt.subplots()
-sns.histplot(df_filtered['price'], bins=20, kde=True, ax=ax)
+sns.histplot(df_filtered['price'], bins=20, kde=True, ax=ax, color='skyblue')
 st.pyplot(fig)
 
 # --- Rating vs Price Scatter ---
 
 st.subheader("Rating vs Price")
 fig2, ax2 = plt.subplots()
-sns.scatterplot(x='price', y='rating', data=df_filtered, hue='review_count', size='review_count', sizes=(20,200), ax=ax2)
+sns.scatterplot(
+x='price',
+y='rating',
+data=df_filtered,
+hue='review_count',
+size='review_count',
+sizes=(20, 200),
+palette="viridis",
+ax=ax2
+)
 st.pyplot(fig2)
 
 # --- Top 5 Reviewed Products ---
@@ -55,9 +67,13 @@ st.subheader("Top 5 Reviewed Products")
 top5 = df_filtered.sort_values(by='review_count', ascending=False).head(5)
 st.table(top5[['title', 'price', 'rating', 'review_count']])
 
-# --- Product Count and Average Price per Subcategory ---
+# --- Subcategory Summary ---
 
 st.subheader("Subcategory Summary")
-sub_summary = df_filtered.groupby('subcategory').agg({'title':'count','price':'mean','rating':'mean'}).reset_index()
-sub_summary = sub_summary.rename(columns={'title':'Product Count','price':'Avg Price','rating':'Avg Rating'})
+sub_summary = df_filtered.groupby('subcategory').agg({
+'title': 'count',
+'price': 'mean',
+'rating': 'mean'
+}).reset_index()
+sub_summary.rename(columns={'title': 'Product Count', 'price': 'Avg Price', 'rating': 'Avg Rating'}, inplace=True)
 st.dataframe(sub_summary)
