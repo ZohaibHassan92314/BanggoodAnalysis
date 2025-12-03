@@ -1,53 +1,91 @@
 import streamlit as st
 import pandas as pd
-import seaborn as sns
+import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-st.set_page_config(page_title="Banggood Dashboard", layout="wide")
-st.title("📊 Banggood Products Dashboard")
+st.set_page_config(page_title="Banggood Product Dashboard", layout="wide")
 
-# --- Load CSV safely ---
+# ---------- LOAD DATA ----------
+@st.cache_data
+def load_data():
+    try:
+        df = pd.read_csv("banggood_products_cleaned.csv")
+    except:
+        # Sample data if CSV missing
+        np.random.seed(42)
+        n = 200
+        df = pd.DataFrame({
+            "main_category": np.random.choice(["Phones", "Electronics", "Sports", "Lighting", "Tools"], n),
+            "subcategory": np.random.choice(["Sub1","Sub2","Sub3"], n),
+            "title": ["Product "+str(i) for i in range(n)],
+            "price_usd": np.random.randint(5,500, n),
+            "brand_name": np.random.choice(["BrandA","BrandB","BrandC"], n)
+        })
+        df["price_category"] = df["price_usd"].apply(lambda p: "Low" if p<20 else "Medium" if p<100 else "High")
+    return df
 
-try:
- df = pd.read_csv("banggood_products_cleaned.csv")
-except FileNotFoundError:
- st.error("CSV file not found!")
-st.stop()
+df = load_data()
 
-# --- Ensure numeric columns ---
+# ---------- SIDEBAR FILTERS ----------
+st.sidebar.header("Filters")
+main_cat_filter = st.sidebar.multiselect("Select Main Category", options=df["main_category"].unique(), default=df["main_category"].unique())
+price_filter = st.sidebar.multiselect("Select Price Category", options=df["price_category"].unique(), default=df["price_category"].unique())
+brand_filter = st.sidebar.multiselect("Select Brand", options=df["brand_name"].unique(), default=df["brand_name"].unique())
 
-for col in ['price','rating','review_count']:
- if col in df.columns:
-  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+# Apply filters
+df_filtered = df[
+    (df["main_category"].isin(main_cat_filter)) &
+    (df["price_category"].isin(price_filter)) &
+    (df["brand_name"].isin(brand_filter))
+]
 
-# --- Sidebar filter ---
-
-if 'main_category' in df.columns:
- category = st.sidebar.selectbox("Select Main Category", df['main_category'].dropna().unique())
- df_filtered = df[df['main_category']==category]
-else:
- df_filtered = df.copy()
-
-# --- Simple KPIs ---
-
-st.subheader("Key Metrics")
-col1, col2, col3 = st.columns(3)
+# ---------- KPI METRICS ----------
+st.title("Banggood Products Dashboard")
+col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total Products", len(df_filtered))
-col2.metric("Avg Price", f"${df_filtered['price'].mean():.2f}" if 'price' in df_filtered else "N/A")
-col3.metric("Avg Rating", f"{df_filtered['rating'].mean():.2f}" if 'rating' in df_filtered else "N/A")
+col2.metric("Average Price (USD)", round(df_filtered["price_usd"].mean(),2))
+col3.metric("Max Price (USD)", round(df_filtered["price_usd"].max(),2))
+col4.metric("Min Price (USD)", round(df_filtered["price_usd"].min(),2))
 
-# --- Chart 1: Price Distribution ---
+# ---------- PLOTS ----------
+st.markdown("---")
+st.subheader("Price Distribution by Category")
+fig1, ax1 = plt.subplots(figsize=(10,5))
+sns.boxplot(x='price_category', y='price_usd', data=df_filtered, palette='Set2', ax=ax1)
+ax1.set_xlabel("Price Category")
+ax1.set_ylabel("Price (USD)")
+st.pyplot(fig1)
 
-if 'price' in df_filtered:
- st.subheader("Price Distribution")
-fig, ax = plt.subplots()
-sns.histplot(df_filtered['price'], bins=20, kde=True, color='skyblue', ax=ax)
-st.pyplot(fig)
-
-# --- Chart 2: Rating vs Price ---
-
-if 'price' in df_filtered and 'rating' in df_filtered:
- st.subheader("Rating vs Price")
-fig2, ax2 = plt.subplots()
-sns.scatterplot(x='price', y='rating', data=df_filtered, hue='review_count' if 'review_count' in df_filtered else None, ax=ax2)
+st.subheader("Number of Products per Price Category")
+fig2, ax2 = plt.subplots(figsize=(8,5))
+sns.countplot(x='price_category', data=df_filtered, order=df_filtered['price_category'].value_counts().index, palette='viridis', ax=ax2)
+ax2.set_xlabel("Price Category")
+ax2.set_ylabel("Count")
 st.pyplot(fig2)
+
+st.subheader("Top 10 Most Expensive Products")
+top_exp = df_filtered.sort_values("price_usd", ascending=False).head(10)
+fig3, ax3 = plt.subplots(figsize=(10,5))
+sns.barplot(x='price_usd', y='title', data=top_exp, palette='magma', ax=ax3)
+ax3.set_xlabel("Price (USD)")
+ax3.set_ylabel("Product")
+st.pyplot(fig3)
+
+st.subheader("Number of Products per Main Category")
+fig4, ax4 = plt.subplots(figsize=(10,5))
+sns.countplot(y='main_category', data=df_filtered, order=df_filtered['main_category'].value_counts().index, palette='coolwarm', ax=ax4)
+st.pyplot(fig4)
+
+st.subheader("Average Price per Main Category")
+avg_price = df_filtered.groupby('main_category')['price_usd'].mean().reset_index().sort_values("price_usd", ascending=False)
+fig5, ax5 = plt.subplots(figsize=(10,5))
+sns.barplot(x='price_usd', y='main_category', data=avg_price, palette='cubehelix', ax=ax5)
+ax5.set_xlabel("Average Price (USD)")
+ax5.set_ylabel("Main Category")
+st.pyplot(fig5)
+
+# ---------- OPTIONAL: Show Table ----------
+st.markdown("---")
+st.subheader("Filtered Products Table")
+st.dataframe(df_filtered.reset_index(drop=True))
